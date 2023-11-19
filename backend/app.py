@@ -316,8 +316,8 @@ def create_app():
                 return jsonify({"error": "Missing fields in input"}), 400
 
             user = Users.objects(id=userid).first()
-            if user:
-                # print("Srj5", user.fullName)
+            '''if user:
+                print("Srj5", user.fullName)'''
             user.update(board=board_data_dict["board"])
             user.save()
             print("Errrrr")
