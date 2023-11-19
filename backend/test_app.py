@@ -3,7 +3,6 @@ Test module for the backend
 """
 import hashlib
 from io import BytesIO
-
 import pytest
 import json
 import datetime
@@ -26,14 +25,17 @@ def client():
     :return: client fixture
     """
     app = create_app()
-    with open("application.yml") as f:
-        info = yaml.load(f, Loader=yaml.FullLoader)
-        username = info["username"]
-        password = info["password"]
-        app.config["MONGODB_SETTINGS"] = {
-            "db": "appTracker",
-            "host": f'mongodb+srv://{username}:{password}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority',
-        }
+    # with open("application.yml") as f:
+    #   info = yaml.load(f, Loader=yaml.FullLoader)
+    #   username = info["username"]
+    #   password = info["password"]
+
+    app.config.from_pyfile("settings.py")
+    app.config["MONGODB_SETTINGS"] = {
+        "db": "appTracker",
+        "host": "mongodb://localhost:27017",
+    }
+
     db = MongoEngine()
     db.disconnect()
     db.init_app(app)

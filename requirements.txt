@@ -17,3 +17,4 @@ pytest-mock
 flask-cors
 webdriver-manager
 PyYAML
+python-dotenv

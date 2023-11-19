@@ -18,7 +18,7 @@ import yaml
 import hashlib
 import uuid
 
-existing_endpoints = ["/applications", "/resume","/boards","/getBoards"]
+existing_endpoints = ["/applications", "/resume", "/boards", "/getBoards"]
 
 
 def create_app():
@@ -259,7 +259,7 @@ def create_app():
                 "id": get_new_application_id(userid),
                 "jobTitle": request_data["jobTitle"],
                 "companyName": request_data["companyName"],
-                "boards.columns":request_data['exobj'],
+                "boards.columns": request_data["exobj"],
                 "date": request_data.get("date"),
                 "jobLink": request_data.get("jobLink"),
                 "location": request_data.get("location"),
@@ -271,7 +271,7 @@ def create_app():
             return jsonify(current_application), 200
         except:
             return jsonify({"error": "Internal server error"}), 500
-        
+
     @app.route("/getBoards", methods=["POST"])
     def get_boards():
         try:
@@ -288,8 +288,10 @@ def create_app():
         except Exception as e:
             return jsonify({"error": "Internal server error"}), 500
 
-
-    @app.route("/boards", methods=["POST"], )
+    @app.route(
+        "/boards",
+        methods=["POST"],
+    )
     def add_boards():
         """
         Add/Update board for the user
@@ -302,20 +304,20 @@ def create_app():
             data_dict = data.to_dict()
             json_string = next(iter(data_dict.keys()))
             board_data_dict = json.loads(json_string)
-            print("Srj1",json_string)
-            print("Srj2",type(board_data_dict["board"]))
-            print("Srj3",userid)
+            # print("Srj1", json_string)
+            # print("Srj2", type(board_data_dict["board"]))
+            # print("Srj3", userid)
             try:
-                print("Srj4",board_data_dict["board"])
+                # print("Srj4", board_data_dict["board"])
                 request_data = board_data_dict["board"]
-                
+
                 # _ = request_data["boardName"]
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
             user = Users.objects(id=userid).first()
             if user:
-                print("Srj5",user.fullName)
+                # print("Srj5", user.fullName)
             user.update(board=board_data_dict["board"])
             user.save()
             print("Errrrr")
@@ -361,7 +363,7 @@ def create_app():
 
             return jsonify(app_to_update), 200
         except:
-            return jsonify({"error": "Internal server error"}), 500    
+            return jsonify({"error": "Internal server error"}), 500
 
     @app.route("/applications/<int:application_id>", methods=["DELETE"])
     def delete_application(application_id):
@@ -457,18 +459,32 @@ def create_app():
 
 
 app = create_app()
-with open("application.yml") as f:
-    info = yaml.load(f, Loader=yaml.FullLoader)
-    username = info["username"]
-    password = info["password"]
-    app.config["MONGODB_SETTINGS"] = {
-        "db": "appTracker",
-        "host": f"mongodb+srv://{username}:{password}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority",
-    }
+
+app.config.from_pyfile("settings.py")
+app.config["MONGODB_SETTINGS"] = {
+    "db": "appTracker",
+    "host": "mongodb://localhost:27017",
+}
+
+# app.config["MONGODB_SETTINGS"] = {
+#     "db": "appTracker",
+#     "host": f"mongodb+srv://{app.config.get('MONGODB_USERNAME')}:{app.config.get('MONGODB_PWD')}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority",
+# }
+
+# with open("application.yml") as f:
+#     info = yaml.load(f, Loader=yaml.FullLoader)
+#     username = info["username"]
+#     password = info["password"]
+
+#     print(app.config.get('MONGODB_USERNAME'))
+#     print(app.config.get('MONGODB_PWD'))
+#     print(f"mongodb+srv://{app.config.get('MONGODB_USERNAME')}:{app.config.get('MONGODB_PWD')}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority")
+
 db = MongoEngine()
 db.init_app(app)
 
-#TODO change the mappings
+
+# TODO change the mappings
 class Users(db.Document):
     """
     Users class. Holds full name, username, password, as well as applications and resumes
@@ -481,7 +497,7 @@ class Users(db.Document):
     authTokens = db.ListField()
     applications = db.ListField()
     resume = db.FileField()
-    board=db.ListField()
+    board = db.ListField()
 
     def to_json(self):
         """
