@@ -13,7 +13,7 @@ function App() {
   const getDataFunction = () => {
     $.ajax({
       url: "http://localhost:5000/getBoards",
-      method: "POST",
+      method: "GET",
       headers: {
         Authorization: "Bearer " + localStorage.getItem("token"),
         "Access-Control-Allow-Origin": "http://localhost:3000",
@@ -24,6 +24,7 @@ function App() {
         getData: "getData",
       }),
       success: (boards) => {
+        console.log(boards)
         dispatch(boardsSlice.actions.setInitialData({ initialData: boards }));
         console.log("SRJ BOARDS", boards);
         console.log("boards", boardData);

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import yaml
 import hashlib
 import uuid
+from mongoengine import ReferenceField,ListField
 
 existing_endpoints = ["/applications", "/resume", "/boards", "/getBoards"]
 
@@ -111,7 +112,8 @@ def create_app():
         headers = request.headers
         token = headers["Authorization"].split(" ")[1]
         userid = token.split(".")[0]
-        return userid
+        print("User ID from header",userid)
+        return str(userid)
 
     def delete_auth_token(token_to_delete, user_id):
         """
@@ -143,7 +145,6 @@ def create_app():
         try:
             # print(request.data)
             data = json.loads(request.data)
-            print(data)
             try:
                 _ = data["username"]
                 _ = data["password"]
@@ -157,16 +158,16 @@ def create_app():
             password = data["password"]
             password_hash = hashlib.md5(password.encode())
             user = Users(
-                id=get_new_user_id(),
+                #id=get_new_user_id(),
                 fullName=data["fullName"],
                 username=data["username"],
                 password=password_hash.hexdigest(),
-                authTokens=[],
-                applications=[],
+                authTokens=[]
             )
             user.save()
-            return jsonify(user.to_json()), 200
-        except:
+            return jsonify("User Created"), 200
+        except Exception as error:
+            print(error)
             return jsonify({"error": "Internal server error"}), 500
 
     @app.route("/users/login", methods=["POST"])
@@ -272,20 +273,31 @@ def create_app():
         except:
             return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/getBoards", methods=["POST"])
+    @app.route("/getBoards", methods=["GET"])
     def get_boards():
         try:
             userid = get_userid_from_header()
             user = Users.objects(id=userid).first()
-
             if user:
-                board = user.board  # Access the 'board' field from the user object
-                if board:
-                    return jsonify(board), 200
+                boards =  Boards.objects.filter(user_id = userid)
+                boards_list = []
+                if len(boards)>0:
+                    for board in boards:
+                        board_dict = board.to_mongo()
+                        columns = Columns.objects.filter(board_id = board.id)
+                        if len(columns)>0:
+                            board_dict["columns"] = columns
+                        else:
+                            board_dict["columns"] = [] 
+                        boards_list.append(board_dict)   
+                    return jsonify(boards_list), 200
+                else:
+                    return jsonify([]), 200   #return an empty page if board does not exist
             else:
                 return jsonify({"error": "User not found"}), 404
 
         except Exception as e:
+            print(e)
             return jsonify({"error": "Internal server error"}), 500
 
     @app.route(
@@ -294,37 +306,46 @@ def create_app():
     )
     def add_boards():
         """
-        Add/Update board for the user
+        Add board for the user
 
         :return: JSON object with status and message
         """
         try:
             userid = get_userid_from_header()
+            #user = Users.objects(_id=userid).first()
             data = request.form
             data_dict = data.to_dict()
             json_string = next(iter(data_dict.keys()))
             board_data_dict = json.loads(json_string)
-            # print("Srj1", json_string)
-            # print("Srj2", type(board_data_dict["board"]))
-            # print("Srj3", userid)
+            request_data = []
             try:
-                # print("Srj4", board_data_dict["board"])
                 request_data = board_data_dict["board"]
 
-                # _ = request_data["boardName"]
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
-            user = Users.objects(id=userid).first()
-            '''if user:
-                print("Srj5", user.fullName)'''
-            user.update(board=board_data_dict["board"])
-            user.save()
-            print("Errrrr")
-            return jsonify(board_data_dict), 200
-        except:
+            '''Logic for adding a board'''
+            board = Boards(
+                name = request_data['name'],
+                isActive = request_data['isActive'],
+                user_id = userid
+            )
+            board.save()
+            '''Logic for adding a column'''
+            columns_dict = request_data['columns']
+            if len(columns_dict) > 0:
+                for col in columns_dict:
+                    column = Columns(
+                        name = col['name'],
+                        tasks = col['tasks'],
+                        board_id = board.id
+                    )
+                    column.save()
+            resp,code = get_boards()
+            return resp, code
+        except Exception as error:
+            print(error)
             return jsonify({"error": "Internal server error"}), 500
-        # return '1',200
 
     @app.route("/applications/<int:application_id>", methods=["PUT"])
     def update_application(application_id):
@@ -483,21 +504,17 @@ app.config["MONGODB_SETTINGS"] = {
 db = MongoEngine()
 db.init_app(app)
 
-
-# TODO change the mappings
+#ODM model to denote the schema of a user
 class Users(db.Document):
     """
     Users class. Holds full name, username, password, as well as applications and resumes
     """
-
-    id = db.IntField(primary_key=True)
+    #id = db.IntField(primary_key=True)
     fullName = db.StringField()
-    username = db.StringField()
+    username = db.EmailField()
     password = db.StringField()
     authTokens = db.ListField()
-    applications = db.ListField()
     resume = db.FileField()
-    board = db.ListField()
 
     def to_json(self):
         """
@@ -506,6 +523,52 @@ class Users(db.Document):
         :return: JSON object
         """
         return {"id": self.id, "fullName": self.fullName, "username": self.username}
+
+#ODM model to denote the schema of the board. 
+class Boards(db.Document):
+    #id = db.IntField(primary_key=True)
+    name = db.StringField()
+    isActive = db.BooleanField()
+    user_id = ReferenceField(Users,reverse_delete_rule='CASCADE')
+    def to_json(self):
+        return {"id":self.id, "name":self.name, "columns":self.columns, "isActive":self.isActive}
+
+
+#ODM model to denote the schema of a column inside a board. Ex. Applied, waiting for referral
+class Columns(db.Document):
+    #id = db.IntField(primary_key=True)
+    name = db.StringField()
+    tasks = db.ListField()
+    board_id = ReferenceField(Boards,reverse_delete_rule='CASCADE')
+    
+    def to_json(self):
+        return {"id":self.id, "name":self.name, "tasks":self.tasks}
+
+
+# class Applications(db.Document):
+#     id = db.IntField(primary_key = True)
+#     jobTitle = db.StringField()
+#     companyName = db.StringField()
+#     boards = ListField(ReferenceField(Boards))
+#     columns = ListField(ReferenceField(Columns))
+#     date = db.DateField()
+#     jobLink = db.StringField()
+#     location = db.StringField()
+#     status = db.StringField()
+
+#     def to_json(self):
+#         """
+#         Returns the user details in JSON object
+
+#         :return: JSON object
+#         """
+#         return {"id": self.id, "Job Title": self.jobTitle, "company Name": self.companyName}
+
+
+# TODO change the mappings
+
+
+
 
 
 def get_new_user_id():
@@ -521,7 +584,6 @@ def get_new_user_id():
     new_id = 0
     for a in user_objects:
         new_id = max(new_id, a["id"])
-
     return new_id + 1
 
 
@@ -543,6 +605,15 @@ def get_new_application_id(user_id):
 
     return new_id + 1
 
+def get_board_id():
+    boards_len = Board.objects()
+    return len(boards_len)+1
+
+def add_boardId(user,board_id):
+    board_list = user.boards
+    board_list.append(board_id)
+    user.update(boards = board_list)
+    user.save()
 
 if __name__ == "__main__":
     app.run()

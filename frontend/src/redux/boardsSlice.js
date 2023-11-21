@@ -40,7 +40,8 @@ const boardsSlice = createSlice({
       };
       board.columns = payload.newColumns;
       state.push(board);
-      createNewBoard(state);
+      console.log(board)
+      createNewBoard(board);
     },
     editBoard: (state, action) => {
       const payload = action.payload;
