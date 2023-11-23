@@ -112,7 +112,6 @@ def create_app():
         headers = request.headers
         token = headers["Authorization"].split(" ")[1]
         userid = token.split(".")[0]
-        print("User ID from header",userid)
         return str(userid)
 
     def delete_auth_token(token_to_delete, user_id):
@@ -317,10 +316,11 @@ def create_app():
             data_dict = data.to_dict()
             json_string = next(iter(data_dict.keys()))
             board_data_dict = json.loads(json_string)
-            request_data = []
+            request_data = {}
             try:
                 request_data = board_data_dict["board"]
-
+                print("Type:",type(request_data))
+                print("Data:",request_data)
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
@@ -346,6 +346,68 @@ def create_app():
         except Exception as error:
             print(error)
             return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/updateColumn",methods=["POST"])
+    def update_column():
+        try:
+            userid = get_userid_from_header()
+            data = request.json
+            print(data)
+            if 'id' in data['column']:
+                columnid = data['column']['id']  #change this to extract the column details after seeing how the data is sent
+                column = Columns.objects(id = columnid).first()
+                print(column)
+                if column:
+                    print("Column exists")
+                    column.update(tasks = data['column']['tasks'])
+                    column.save()
+                else:
+                    return jsonify("Column does not exist"),500
+            else:
+                print("Inside new column logic")
+                column = Columns(
+                    name = data['column']['name'],
+                    tasks = data['column']['tasks'],
+                    board_id = data['column']['board_id']
+                ) 
+                column.save()
+            return jsonify(column),200
+        except Exception as e:
+            print(e)
+            return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/deleteColumn",methods=["POST"])
+    def deleteColumn():
+        try:
+            userid = get_userid_from_header()
+            if userid:
+                data = request.json
+                columnid = data['columnid']
+                column = Columns.objects(id = columnid).first()
+                if column:
+                    column.delete()
+                return jsonify(columnid),200
+            else:
+                return jsonify("Userid does not exist to delete"),401
+        except Exception as error:
+            print(error)
+            return jsonify(error),500
+    
+    @app.route("/deleteBoard",methods=["POST"])
+    def deleteBoard():
+        try:
+            userid = get_userid_from_header()
+            data = request.json
+            boardid = data['boardid']
+            board = Boards.objects(id=boardid).first()
+            if board:
+                board.delete()
+                return jsonify(boardid),200
+            # else:
+            #     return jsonify("Board does not exist"), 500
+        except Exception as error:
+            print(error)
+            return jsonify({"error":"Internal server error"}), 500
 
     @app.route("/applications/<int:application_id>", methods=["PUT"])
     def update_application(application_id):
@@ -605,15 +667,7 @@ def get_new_application_id(user_id):
 
     return new_id + 1
 
-def get_board_id():
-    boards_len = Board.objects()
-    return len(boards_len)+1
 
-def add_boardId(user,board_id):
-    board_list = user.boards
-    board_list.append(board_id)
-    user.update(boards = board_list)
-    user.save()
 
 if __name__ == "__main__":
     app.run()
