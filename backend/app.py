@@ -222,54 +222,42 @@ def create_app():
         except:
             return jsonify({"error": "Internal server error"}), 500
 
-    # get data from the CSV file for rendering root page
-    @app.route("/applications", methods=["GET"])
-    def get_data():
-        """
-        Gets user's applications data from the database
 
-        :return: JSON object with application data
+
+    @app.route("/new/application", methods=["POST"])
+    def application():
+        """
+        Creates a new application profile and adds the application to the database and returns the message
+
+        :return: JSON object
         """
         try:
             userid = get_userid_from_header()
-            user = Users.objects(id=userid).first()
-            applications = user["applications"]
-            return jsonify(applications)
-        except:
-            return jsonify({"error": "Internal server error"}), 500
-
-    @app.route("/applications", methods=["POST"])
-    def add_application():
-        """
-        Add a new job application for the user
-
-        :return: JSON object with status and message
-        """
-        try:
-            userid = get_userid_from_header()
+            print(request.data,userid)
+            data = json.loads(request.data)
             try:
-                request_data = json.loads(request.data)["application"]
-                _ = request_data["jobTitle"]
-                _ = request_data["companyName"]
+                _ = data["jobTitle"]
+                _ = data["companyName"]
+                _ = data["date"]
+                _ = data["jobLink"]
+                _ = data["location"]
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
-            user = Users.objects(id=userid).first()
-            current_application = {
-                "id": get_new_application_id(userid),
-                "jobTitle": request_data["jobTitle"],
-                "companyName": request_data["companyName"],
-                "boards.columns": request_data["exobj"],
-                "date": request_data.get("date"),
-                "jobLink": request_data.get("jobLink"),
-                "location": request_data.get("location"),
-                "status": request_data.get("status", "1"),
-            }
-            applications = user["applications"] + [current_application]
-
-            user.update(applications=applications)
-            return jsonify(current_application), 200
-        except:
+            
+            jobTitle = data["jobTitle"]
+            application = Applications(
+                jobTitle = data["jobTitle"],
+                companyName=data["companyName"],
+                date=data["date"],
+                jobLink=data["jobLink"],
+                location=data["location"],
+                user_id=userid
+            )
+            application.save()
+            return jsonify("Application Created"), 200
+        except Exception as error:
+            print(error)
             return jsonify({"error": "Internal server error"}), 500
 
     @app.route("/getBoards", methods=["GET"])
@@ -298,11 +286,26 @@ def create_app():
         except Exception as e:
             print(e)
             return jsonify({"error": "Internal server error"}), 500
+        
+        # get data from the CSV file for rendering root page
+    @app.route("/applications", methods=["GET"])
+    def get_data():
+        """
+        Gets user's applications data from the database
 
-    @app.route(
-        "/boards",
-        methods=["POST"],
-    )
+        :return: JSON object with application data
+        """
+        try:
+            userid = get_userid_from_header()
+            user = Applications.objects(user_id=userid).first()
+            if user:
+                applications=Applications.objects.filter(user_id=userid)
+                print(applications)
+            print(user)
+        except:
+            return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/boards",methods=["POST"])
     def add_boards():
         """
         Add board for the user
@@ -543,11 +546,18 @@ def create_app():
 
 app = create_app()
 
+
 app.config.from_pyfile("settings.py")
 app.config["MONGODB_SETTINGS"] = {
     "db": "appTracker",
     "host": "mongodb://localhost:27017",
 }
+
+# app.config.from_pyfile("settings.py")
+# app.config["MONGODB_SETTINGS"] = {
+#     "db": "dummy",
+#     "host": "mongodb+srv://atsse2000:Seproject2000@cluster0.rj2epqq.mongodb.net/dummy?retryWrites=true&w=majority",
+# }
 
 # app.config["MONGODB_SETTINGS"] = {
 #     "db": "appTracker",
@@ -565,6 +575,7 @@ app.config["MONGODB_SETTINGS"] = {
 
 db = MongoEngine()
 db.init_app(app)
+
 
 #ODM model to denote the schema of a user
 class Users(db.Document):
@@ -606,31 +617,23 @@ class Columns(db.Document):
     def to_json(self):
         return {"id":self.id, "name":self.name, "tasks":self.tasks}
 
+class Applications(db.Document):
+    jobTitle = db.StringField()
+    companyName = db.StringField()
+    boards = ListField(ReferenceField(Boards))
+    columns = ListField(ReferenceField(Columns))
+    user_id = ReferenceField(Users,reverse_delete_rule='CASCADE')
+    date = db.DateField()
+    jobLink = db.StringField()
+    location = db.StringField()
 
-# class Applications(db.Document):
-#     id = db.IntField(primary_key = True)
-#     jobTitle = db.StringField()
-#     companyName = db.StringField()
-#     boards = ListField(ReferenceField(Boards))
-#     columns = ListField(ReferenceField(Columns))
-#     date = db.DateField()
-#     jobLink = db.StringField()
-#     location = db.StringField()
-#     status = db.StringField()
+    def to_json(self):
+        """
+        Returns the user details in JSON object
 
-#     def to_json(self):
-#         """
-#         Returns the user details in JSON object
-
-#         :return: JSON object
-#         """
-#         return {"id": self.id, "Job Title": self.jobTitle, "company Name": self.companyName}
-
-
-# TODO change the mappings
-
-
-
+        :return: JSON object
+        """
+        return {"id": self.id, "Job Title": self.jobTitle, "company Name": self.companyName}
 
 
 def get_new_user_id():
@@ -670,4 +673,4 @@ def get_new_application_id(user_id):
 
 
 if __name__ == "__main__":
-    app.run()
+    app.run(debug=True)
