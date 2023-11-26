@@ -2,6 +2,7 @@
 The flask application for our program
 """
 # importing required python libraries
+from bson import ObjectId
 from flask import Flask, jsonify, request, send_file
 from flask_mongoengine import MongoEngine
 from flask_cors import CORS, cross_origin
@@ -259,50 +260,95 @@ def create_app():
         except Exception as error:
             print(error)
             return jsonify({"error": "Internal server error"}), 500
+    @app.route("/applications",methods=["GET"])
+    def get_application():
+        try:
+            userid=get_userid_from_header()
+            user=Users.objects(id=userid).first()
+            if user:
+                apps=Applications.objects.filter(user_id=userid)
+                app_list=[]
+                if len(apps)>0:
+                    for app in apps:
+                        app_dict=app.to_mongo()
+                        if isinstance(app_dict['user_id'], ObjectId) or isinstance('_id',ObjectId):
+                            app_dict['user_id']=str(app_dict['user_id'])
+                            app_dict['_id']=str(app_dict['_id'])
+                        app_list.append(app_dict)
+                return jsonify(app_list), 200
+            else:
+                return jsonify([]),200
+        except Exception as e:
+            print(e)
+            return jsonify({"error":"Internal server error"}), 500
 
+    # @app.route("/getBoards", methods=["GET"])
+    # def get_boards():
+    #     try:
+    #         userid = get_userid_from_header()
+    #         user = Users.objects(id=userid).first()
+    #         if user:
+    #             boards =  Boards.objects.filter(user_id = userid)
+    #             boards_list = []
+    #             if len(boards)>0:
+    #                 for board in boards:
+    #                     board_dict = board.to_mongo()
+    #                     columns = Columns.objects.filter(board_id = board.id)
+    #                     if len(columns)>0:
+    #                         board_dict["columns"] = columns
+    #                     else:
+    #                         board_dict["columns"] = [] 
+    #                     boards_list.append(board_dict)   
+    #                 return jsonify(boards_list), 200
+    #             else:
+    #                 return jsonify([]), 200   #return an empty page if board does not exist
+    #         else:
+    #             return jsonify({"error": "User not found"}), 404
+
+    #     except Exception as e:
+    #         print(e)
+    #         return jsonify({"error": "Internal server error"}), 500
+
+    
+        
     @app.route("/getBoards", methods=["GET"])
     def get_boards():
         try:
             userid = get_userid_from_header()
             user = Users.objects(id=userid).first()
+            
             if user:
-                boards =  Boards.objects.filter(user_id = userid)
+                boards = Boards.objects.filter(user_id=userid)
                 boards_list = []
-                if len(boards)>0:
+                
+                if len(boards) > 0:
                     for board in boards:
                         board_dict = board.to_mongo()
-                        columns = Columns.objects.filter(board_id = board.id)
-                        if len(columns)>0:
-                            board_dict["columns"] = columns
-                        else:
-                            board_dict["columns"] = [] 
-                        boards_list.append(board_dict)   
+                        if isinstance(board_dict['user_id'], ObjectId) or isinstance(board_dict['board_id'], ObjectId):
+                            board_dict['user_id'] = str(board_dict['user_id'])
+                            board_dict['_id'] = str(board_dict['_id'])  # Convert ObjectId to string
+                        columns = Columns.objects.filter(board_id=board.id)
+                        #print(type(columns))
+                        column_data = []
+                        for col in columns:
+                            col_dict = col.to_mongo()
+                            #print(type(col_dict))
+                            if isinstance(col_dict['_id'], ObjectId) or isinstance(col_dict['board_id'],ObjectId):
+                                col_dict['_id'] = str(col_dict['_id'])  # Convert ObjectId to string
+                                col_dict['board_id']=str(col_dict['board_id'])
+                            column_data.append(col_dict)
+
+                        board_dict["columns"] = column_data
+                        boards_list.append(board_dict)
+                    
                     return jsonify(boards_list), 200
                 else:
-                    return jsonify([]), 200   #return an empty page if board does not exist
+                    return jsonify([]), 200  # Return an empty page if board does not exist
             else:
                 return jsonify({"error": "User not found"}), 404
 
         except Exception as e:
             print(e)
-            return jsonify({"error": "Internal server error"}), 500
-        
-        # get data from the CSV file for rendering root page
-    @app.route("/applications", methods=["GET"])
-    def get_data():
-        """
-        Gets user's applications data from the database
-
-        :return: JSON object with application data
-        """
-        try:
-            userid = get_userid_from_header()
-            user = Applications.objects(user_id=userid).first()
-            if user:
-                applications=Applications.objects.filter(user_id=userid)
-                print(applications)
-            print(user)
-        except:
             return jsonify({"error": "Internal server error"}), 500
 
     @app.route("/boards",methods=["POST"])
@@ -349,6 +395,37 @@ def create_app():
         except Exception as error:
             print(error)
             return jsonify({"error": "Internal server error"}), 500
+        
+    # @app.route("/applications",methods=["POST"])
+    # def update_application():
+    #     try:
+    #         userid=get_userid_from_header
+    #         data=request.json
+    #         print(data)
+    #         if 'id' in data['application']:
+    #             applicationid=data['application']['id']
+    #             application=Applications.objects(id=applicationid).first()
+    #             print(application)
+    #             if application:
+    #                 application.update(tasks=data['application']['tasks'])
+    #                 application.save()
+    #             else:
+    #                 return jsonify("Application does not exist"), 500
+    #         else:
+    #             print("Adding new application")
+    #             application=Applications(
+    #                 jobTitle = data['application']['jobTitle'],
+    #                 companyName=data['application']['companyName'],
+    #                 date=data['application']['date'],
+    #                 jobLink=data['application']['jobLink'],
+    #                 location=data['application']['location'],
+    #                 user_id=data['application']['user_id'],
+    #             )
+    #             application.save()
+    #         return jsonify(application),200
+    #     except Exception as e:
+    #         print(e)
+    #         return jsonify({"error":"Internal server error"}), 500
 
     @app.route("/updateColumn",methods=["POST"])
     def update_column():
@@ -484,11 +561,6 @@ def create_app():
 
     @app.route("/resume", methods=["POST"])
     def upload_resume():
-        """
-        Uploads resume file or updates an existing resume for the user
-
-        :return: JSON object with status and message
-        """
         try:
             userid = get_userid_from_header()
             try:
@@ -547,17 +619,17 @@ def create_app():
 app = create_app()
 
 
-app.config.from_pyfile("settings.py")
-app.config["MONGODB_SETTINGS"] = {
-    "db": "appTracker",
-    "host": "mongodb://localhost:27017",
-}
-
 # app.config.from_pyfile("settings.py")
 # app.config["MONGODB_SETTINGS"] = {
-#     "db": "dummy",
-#     "host": "mongodb+srv://atsse2000:Seproject2000@cluster0.rj2epqq.mongodb.net/dummy?retryWrites=true&w=majority",
+#     "db": "appTracker",
+#     "host": "mongodb://localhost:27017",
 # }
+
+app.config.from_pyfile("settings.py")
+app.config["MONGODB_SETTINGS"] = {
+    "db": "dummy",
+    "host": "mongodb+srv://atsse2000:Seproject2000@cluster0.rj2epqq.mongodb.net/dummy?retryWrites=true&w=majority",
+}
 
 # app.config["MONGODB_SETTINGS"] = {
 #     "db": "appTracker",
@@ -616,6 +688,9 @@ class Columns(db.Document):
     
     def to_json(self):
         return {"id":self.id, "name":self.name, "tasks":self.tasks}
+
+# class ApplColumns(db.Document):
+#     name=db.
 
 class Applications(db.Document):
     jobTitle = db.StringField()
