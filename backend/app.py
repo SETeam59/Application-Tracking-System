@@ -6,19 +6,11 @@ from bson import ObjectId
 from flask import Flask, jsonify, request, send_file
 from flask_mongoengine import MongoEngine
 from flask_cors import CORS, cross_origin
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from bs4 import BeautifulSoup
-from itertools import islice
-from webdriver_manager.chrome import ChromeDriverManager
-from bson.json_util import dumps
-import pandas as pd
 import json
 from datetime import datetime, timedelta
-import yaml
 import hashlib
 import uuid
-from mongoengine import ReferenceField,ListField
+from mongoengine import ReferenceField
 
 existing_endpoints = ["/applications", "/resume", "/boards", "/getBoards"]
 
@@ -158,11 +150,10 @@ def create_app():
             password = data["password"]
             password_hash = hashlib.md5(password.encode())
             user = Users(
-                #id=get_new_user_id(),
                 fullName=data["fullName"],
                 username=data["username"],
                 password=password_hash.hexdigest(),
-                authTokens=[]
+                authTokens=[],
             )
             user.save()
             return jsonify("User Created"), 200
@@ -223,9 +214,7 @@ def create_app():
         except:
             return jsonify({"error": "Internal server error"}), 500
 
-
-
-    @app.route("/new/application", methods=["POST"])
+    @app.route("/application", methods=["POST"])
     def application():
         """
         Creates a new application profile and adds the application to the database and returns the message
@@ -234,8 +223,9 @@ def create_app():
         """
         try:
             userid = get_userid_from_header()
-            print(request.data,userid)
+            print(request.json, userid)
             data = json.loads(request.data)
+            print(data)
             try:
                 _ = data["jobTitle"]
                 _ = data["companyName"]
@@ -245,105 +235,93 @@ def create_app():
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
-            
             jobTitle = data["jobTitle"]
             application = Applications(
-                jobTitle = data["jobTitle"],
+                jobTitle=data["jobTitle"],
                 companyName=data["companyName"],
                 date=data["date"],
                 jobLink=data["jobLink"],
                 location=data["location"],
-                user_id=userid
+                user_id=userid,
+                board=data["board"],
             )
             application.save()
             return jsonify("Application Created"), 200
         except Exception as error:
             print(error)
             return jsonify({"error": "Internal server error"}), 500
-    @app.route("/applications",methods=["GET"])
+
+    @app.route("/application", methods=["GET"])
     def get_application():
         try:
-            userid=get_userid_from_header()
-            user=Users.objects(id=userid).first()
+            userid = get_userid_from_header()
+            user = Users.objects(id=userid).first()
             if user:
-                apps=Applications.objects.filter(user_id=userid)
-                app_list=[]
-                if len(apps)>0:
+                apps = Applications.objects.filter(user_id=userid)
+                app_list = []
+                if len(apps) > 0:
                     for app in apps:
-                        app_dict=app.to_mongo()
-                        if isinstance(app_dict['user_id'], ObjectId) or isinstance('_id',ObjectId):
-                            app_dict['user_id']=str(app_dict['user_id'])
-                            app_dict['_id']=str(app_dict['_id'])
+                        app_dict = app.to_mongo()
+                        if (
+                            isinstance(app_dict["user_id"], ObjectId)
+                            or isinstance("_id", ObjectId)
+                            or isinstance("board", ObjectId)
+                        ):
+                            app_dict["user_id"] = str(app_dict["user_id"])
+                            app_dict["board"] = str(app_dict["board"])
+                            app_dict["_id"] = str(app_dict["_id"])
                         app_list.append(app_dict)
                 return jsonify(app_list), 200
             else:
-                return jsonify([]),200
+                return jsonify([]), 200
         except Exception as e:
             print(e)
-            return jsonify({"error":"Internal server error"}), 500
+            return jsonify({"error": "Internal server error"}), 500
 
-    # @app.route("/getBoards", methods=["GET"])
-    # def get_boards():
-    #     try:
-    #         userid = get_userid_from_header()
-    #         user = Users.objects(id=userid).first()
-    #         if user:
-    #             boards =  Boards.objects.filter(user_id = userid)
-    #             boards_list = []
-    #             if len(boards)>0:
-    #                 for board in boards:
-    #                     board_dict = board.to_mongo()
-    #                     columns = Columns.objects.filter(board_id = board.id)
-    #                     if len(columns)>0:
-    #                         board_dict["columns"] = columns
-    #                     else:
-    #                         board_dict["columns"] = [] 
-    #                     boards_list.append(board_dict)   
-    #                 return jsonify(boards_list), 200
-    #             else:
-    #                 return jsonify([]), 200   #return an empty page if board does not exist
-    #         else:
-    #             return jsonify({"error": "User not found"}), 404
-
-    #     except Exception as e:
-    #         print(e)
-    #         return jsonify({"error": "Internal server error"}), 500
-
-    
-        
     @app.route("/getBoards", methods=["GET"])
     def get_boards():
         try:
             userid = get_userid_from_header()
             user = Users.objects(id=userid).first()
-            
+
             if user:
                 boards = Boards.objects.filter(user_id=userid)
                 boards_list = []
-                
+
                 if len(boards) > 0:
                     for board in boards:
                         board_dict = board.to_mongo()
-                        if isinstance(board_dict['user_id'], ObjectId) or isinstance(board_dict['board_id'], ObjectId):
-                            board_dict['user_id'] = str(board_dict['user_id'])
-                            board_dict['_id'] = str(board_dict['_id'])  # Convert ObjectId to string
+                        if isinstance(board_dict["user_id"], ObjectId) or isinstance(
+                            board_dict["board_id"], ObjectId
+                        ):
+                            board_dict["user_id"] = str(board_dict["user_id"])
+                            board_dict["_id"] = str(
+                                board_dict["_id"]
+                            )  # Convert ObjectId to string
                         columns = Columns.objects.filter(board_id=board.id)
-                        #print(type(columns))
+                        # print(type(columns))
                         column_data = []
                         for col in columns:
                             col_dict = col.to_mongo()
-                            #print(type(col_dict))
-                            if isinstance(col_dict['_id'], ObjectId) or isinstance(col_dict['board_id'],ObjectId):
-                                col_dict['_id'] = str(col_dict['_id'])  # Convert ObjectId to string
-                                col_dict['board_id']=str(col_dict['board_id'])
+                            # print(type(col_dict))
+                            if isinstance(col_dict["_id"], ObjectId) or isinstance(
+                                col_dict["board_id"], ObjectId
+                            ):
+                                col_dict["_id"] = str(
+                                    col_dict["_id"]
+                                )  # Convert ObjectId to string
+                                col_dict["board_id"] = str(col_dict["board_id"])
                             column_data.append(col_dict)
 
                         board_dict["columns"] = column_data
                         boards_list.append(board_dict)
-                    
+
                     return jsonify(boards_list), 200
                 else:
-                    return jsonify([]), 200  # Return an empty page if board does not exist
+                    return (
+                        jsonify([]),
+                        200,
+                    )  # Return an empty page if board does not exist
             else:
                 return jsonify({"error": "User not found"}), 404
 
@@ -351,7 +329,7 @@ def create_app():
             print(e)
             return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/boards",methods=["POST"])
+    @app.route("/boards", methods=["POST"])
     def add_boards():
         """
         Add board for the user
@@ -360,137 +338,131 @@ def create_app():
         """
         try:
             userid = get_userid_from_header()
-            #user = Users.objects(_id=userid).first()
+            # user = Users.objects(_id=userid).first()
             data = request.form
             data_dict = data.to_dict()
+            print(data_dict)
             json_string = next(iter(data_dict.keys()))
             board_data_dict = json.loads(json_string)
             request_data = {}
             try:
                 request_data = board_data_dict["board"]
-                print("Type:",type(request_data))
-                print("Data:",request_data)
+                print("Type:", type(request_data))
+                print("Data:", request_data)
             except:
                 return jsonify({"error": "Missing fields in input"}), 400
 
-            '''Logic for adding a board'''
+            """Logic for adding a board"""
             board = Boards(
-                name = request_data['name'],
-                isActive = request_data['isActive'],
-                user_id = userid
+                name=request_data["name"],
+                user_id=userid,
             )
             board.save()
-            '''Logic for adding a column'''
-            columns_dict = request_data['columns']
+            """Logic for adding a column"""
+            columns_dict = request_data["columns"]
             if len(columns_dict) > 0:
                 for col in columns_dict:
                     column = Columns(
-                        name = col['name'],
-                        tasks = col['tasks'],
-                        board_id = board.id
+                        name=col["name"], tasks=col["tasks"], board_id=board.id
                     )
                     column.save()
-            resp,code = get_boards()
+            resp, code = get_boards()
             return resp, code
         except Exception as error:
             print(error)
             return jsonify({"error": "Internal server error"}), 500
-        
-    # @app.route("/applications",methods=["POST"])
-    # def update_application():
-    #     try:
-    #         userid=get_userid_from_header
-    #         data=request.json
-    #         print(data)
-    #         if 'id' in data['application']:
-    #             applicationid=data['application']['id']
-    #             application=Applications.objects(id=applicationid).first()
-    #             print(application)
-    #             if application:
-    #                 application.update(tasks=data['application']['tasks'])
-    #                 application.save()
-    #             else:
-    #                 return jsonify("Application does not exist"), 500
-    #         else:
-    #             print("Adding new application")
-    #             application=Applications(
-    #                 jobTitle = data['application']['jobTitle'],
-    #                 companyName=data['application']['companyName'],
-    #                 date=data['application']['date'],
-    #                 jobLink=data['application']['jobLink'],
-    #                 location=data['application']['location'],
-    #                 user_id=data['application']['user_id'],
-    #             )
-    #             application.save()
-    #         return jsonify(application),200
-    #     except Exception as e:
-    #         print(e)
-    #         return jsonify({"error":"Internal server error"}), 500
 
-    @app.route("/updateColumn",methods=["POST"])
+    @app.route("/columns", methods=["POST"])
+    def addColumns():
+        data = request.json
+        print(data)
+        print("Extension has called this")
+        boardid = data["column"]["boardid"]
+        columnName = data["column"]["name"]
+        columns = Columns.objects(board_id=boardid).all()
+        print(columns)
+        if len(columns) == 0:
+            newColumn = Columns(
+                name=columnName, tasks=data["column"]["tasks"], board_id=boardid
+            )
+            newColumn.save()
+            return jsonify(newColumn), 200
+        for column in columns:
+            print(len(columns))
+            print(column)
+            if column.name.lower() == columnName.lower():
+                # column present
+                currentTasks = column.tasks
+                if len(currentTasks) != 0:
+                    currentTasks.append(data["column"]["tasks"])
+                else:
+                    currentTasks = data["column"]["tasks"]
+                column.save()
+                return jsonify(column), 200
+            else:
+                newColumn = Columns(
+                    name=columnName, tasks=data["column"]["tasks"], board_id=boardid
+                )
+                newColumn.save()
+                return jsonify(newColumn), 200
+
+    @app.route("/editcolumns", methods=["POST"])
     def update_column():
         try:
             userid = get_userid_from_header()
             data = request.json
-            print(data)
-            if 'id' in data['column']:
-                columnid = data['column']['id']  #change this to extract the column details after seeing how the data is sent
-                column = Columns.objects(id = columnid).first()
-                print(column)
+            print("data ", data)
+            if "id" in data["column"]:
+                columnid = data["column"]["id"]
+                column = Columns.objects(id=columnid).first()
                 if column:
                     print("Column exists")
-                    column.update(tasks = data['column']['tasks'])
+                    column.update(name=data["column"]["name"])
+                    column.update(tasks=data["column"]["tasks"])
                     column.save()
                 else:
-                    return jsonify("Column does not exist"),500
+                    return jsonify("Column does not exist"), 500
             else:
-                print("Inside new column logic")
-                column = Columns(
-                    name = data['column']['name'],
-                    tasks = data['column']['tasks'],
-                    board_id = data['column']['board_id']
-                ) 
-                column.save()
-            return jsonify(column),200
+                return jsonify({"error": "Column should be present for update"}), 500
+            return jsonify(column), 200
         except Exception as e:
             print(e)
             return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/deleteColumn",methods=["POST"])
-    def deleteColumn():
+    @app.route("/columns/<string:columnid>", methods=["DELETE"])
+    def deleteColumn(columnid):
         try:
             userid = get_userid_from_header()
             if userid:
-                data = request.json
-                columnid = data['columnid']
-                column = Columns.objects(id = columnid).first()
+                column = Columns.objects(id=columnid).first()
                 if column:
                     column.delete()
-                return jsonify(columnid),200
+                return jsonify(columnid), 200
             else:
-                return jsonify("Userid does not exist to delete"),401
+                return jsonify("Userid does not exist to delete"), 401
         except Exception as error:
             print(error)
-            return jsonify(error),500
-    
-    @app.route("/deleteBoard",methods=["POST"])
-    def deleteBoard():
+            return jsonify(error), 500
+
+    @app.route("/boards/<string:boardid>", methods=["DELETE"])
+    def deleteBoard(boardid):
         try:
-            userid = get_userid_from_header()
-            data = request.json
-            boardid = data['boardid']
             board = Boards.objects(id=boardid).first()
             if board:
                 board.delete()
-                return jsonify(boardid),200
-            # else:
-            #     return jsonify("Board does not exist"), 500
+                return jsonify(boardid), 200
         except Exception as error:
             print(error)
-            return jsonify({"error":"Internal server error"}), 500
+            return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/applications/<int:application_id>", methods=["PUT"])
-    def update_application(application_id):
+    @app.route("/api/items", methods=["GET"])
+    def get_items():
+        names = Boards.objects.only("name", "id")
+        print(list(names))
+        return jsonify(list(names))
+
+    @app.route("/updateapplications", methods=["POST"])
+    def update_application():
         """
         Updates the existing job application for the user
 
@@ -502,10 +474,11 @@ def create_app():
             try:
                 request_data = json.loads(request.data)["application"]
             except:
+                print("jhere")
                 return jsonify({"error": "No fields found in input"}), 400
 
             user = Users.objects(id=userid).first()
-            current_applications = user["applications"]
+            current_applications = Applications.objects(user_id=userid)
 
             if len(current_applications) == 0:
                 return jsonify({"error": "No applications found"}), 400
@@ -514,7 +487,7 @@ def create_app():
                 app_to_update = None
                 application_updated_flag = False
                 for application in current_applications:
-                    if application["id"] == application_id:
+                    if application["id"] == application.id:
                         app_to_update = application
                         application_updated_flag = True
                         for key, value in request_data.items():
@@ -528,7 +501,7 @@ def create_app():
         except:
             return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/applications/<int:application_id>", methods=["DELETE"])
+    @app.route("/application/<string:application_id>", methods=["DELETE"])
     def delete_application(application_id):
         """
         Deletes the given job application for the user
@@ -561,20 +534,19 @@ def create_app():
 
     @app.route("/resume", methods=["POST"])
     def upload_resume():
-
-        ''' This method uploads a resume file into the database and gives a message as response if successfully uploaded 
-        '''
+        """This method uploads a resume file into the database and gives a message as response if successfully uploaded"""
         try:
-            id=get_userid_from_header()
+            id = get_userid_from_header()
+            print(request.files)
             try:
-                file= request.files["file"].read()
+                file = request.files["file"].read()
             except:
-                return jsonify({"error":"File not found"}),400
-            user=Users.objects(id=id).first()
+                return jsonify({"error": "File not found"}), 400
+            user = Users.objects(id=id).first()
             if not user.resume.read():
                 user.resume.put(file)
                 user.save()
-                return jsonify({"message":"resume  uploaded"}), 200
+                return jsonify({"message": "resume  uploaded"}), 200
             else:
                 user.resume.replace(file)
                 user.save()
@@ -582,7 +554,6 @@ def create_app():
         except Exception as e:
             print(e)
             return jsonify({"error": "Internal server error"}), 500
-
 
     @app.route("/resume", methods=["GET"])
     def get_resume():
@@ -594,9 +565,10 @@ def create_app():
             id = get_userid_from_header()
             try:
                 user = Users.objects(id=id).first()
-                if len(user.resume.read()) == 0:  raise FileNotFoundError
+                if len(user.resume.read()) == 0:
+                    raise FileNotFoundError
                 else:
-                     user.resume.seek(0)
+                    user.resume.seek(0)
             except:
                 return jsonify({"error": "resume not be found"}), 400
             response = send_file(
@@ -610,48 +582,30 @@ def create_app():
             return response, 200
         except:
             return jsonify({"error": "Internal server error"}), 500
+
     return app
-    
+
 
 app = create_app()
 
 
-# app.config.from_pyfile("settings.py")
-# app.config["MONGODB_SETTINGS"] = {
-#     "db": "appTracker",
-#     "host": "mongodb://localhost:27017",
-# }
-
 app.config.from_pyfile("settings.py")
 app.config["MONGODB_SETTINGS"] = {
-    "db": "dummy",
-    "host": "mongodb+srv://atsse2000:Seproject2000@cluster0.rj2epqq.mongodb.net/dummy?retryWrites=true&w=majority",
+    "db": "appTracker",
+    "host": "mongodb://localhost:27017",
 }
-
-# app.config["MONGODB_SETTINGS"] = {
-#     "db": "appTracker",
-#     "host": f"mongodb+srv://{app.config.get('MONGODB_USERNAME')}:{app.config.get('MONGODB_PWD')}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority",
-# }
-
-# with open("application.yml") as f:
-#     info = yaml.load(f, Loader=yaml.FullLoader)
-#     username = info["username"]
-#     password = info["password"]
-
-#     print(app.config.get('MONGODB_USERNAME'))
-#     print(app.config.get('MONGODB_PWD'))
-#     print(f"mongodb+srv://{app.config.get('MONGODB_USERNAME')}:{app.config.get('MONGODB_PWD')}@cluster0.en3fo.mongodb.net/todolistDB?retryWrites=true&w=majority")
 
 db = MongoEngine()
 db.init_app(app)
 
 
-#ODM model to denote the schema of a user
+# ODM model to denote the schema of a user
 class Users(db.Document):
     """
     Users class. Holds full name, username, password, as well as applications and resumes
     """
-    #id = db.IntField(primary_key=True)
+
+    # id = db.IntField(primary_key=True)
     fullName = db.StringField()
     username = db.EmailField()
     password = db.StringField()
@@ -666,36 +620,36 @@ class Users(db.Document):
         """
         return {"id": self.id, "fullName": self.fullName, "username": self.username}
 
-#ODM model to denote the schema of the board. 
+
+# ODM model to denote the schema of the board.
 class Boards(db.Document):
-    #id = db.IntField(primary_key=True)
     name = db.StringField()
-    isActive = db.BooleanField()
-    user_id = ReferenceField(Users,reverse_delete_rule='CASCADE')
+    user_id = ReferenceField(Users, reverse_delete_rule="CASCADE")
+
     def to_json(self):
-        return {"id":self.id, "name":self.name, "columns":self.columns, "isActive":self.isActive}
+        return {
+            "id": self.id,
+            "name": self.name,
+            "columns": self.columns,
+        }
 
 
-#ODM model to denote the schema of a column inside a board. Ex. Applied, waiting for referral
+# ODM model to denote the schema of a column inside a board. Ex. Applied, waiting for referral
 class Columns(db.Document):
-    #id = db.IntField(primary_key=True)
     name = db.StringField()
     tasks = db.ListField()
-    board_id = ReferenceField(Boards,reverse_delete_rule='CASCADE')
-    
-    def to_json(self):
-        return {"id":self.id, "name":self.name, "tasks":self.tasks}
+    board_id = ReferenceField(Boards, reverse_delete_rule="CASCADE")
 
-# class ApplColumns(db.Document):
-#     name=db.
+    def to_json(self):
+        return {"id": self.id, "name": self.name, "tasks": self.tasks}
+
 
 class Applications(db.Document):
     jobTitle = db.StringField()
     companyName = db.StringField()
-    boards = ListField(ReferenceField(Boards))
-    columns = ListField(ReferenceField(Columns))
-    user_id = ReferenceField(Users,reverse_delete_rule='CASCADE')
-    date = db.DateField()
+    board = ReferenceField(Boards)
+    user_id = ReferenceField(Users, reverse_delete_rule="CASCADE")
+    date = db.StringField()
     jobLink = db.StringField()
     location = db.StringField()
 
@@ -705,43 +659,11 @@ class Applications(db.Document):
 
         :return: JSON object
         """
-        return {"id": self.id, "Job Title": self.jobTitle, "company Name": self.companyName}
-
-
-def get_new_user_id():
-    """
-    Returns the next value to be used for new user
-
-    :return: key with new user_id
-    """
-    user_objects = Users.objects()
-    if len(user_objects) == 0:
-        return 1
-
-    new_id = 0
-    for a in user_objects:
-        new_id = max(new_id, a["id"])
-    return new_id + 1
-
-
-def get_new_application_id(user_id):
-    """
-    Returns the next value to be used for new application
-
-    :param: user_id: User id of the active user
-    :return: key with new application_id
-    """
-    user = Users.objects(id=user_id).first()
-
-    if len(user["applications"]) == 0:
-        return 1
-
-    new_id = 0
-    for a in user["applications"]:
-        new_id = max(new_id, a["id"])
-
-    return new_id + 1
-
+        return {
+            "id": self.id,
+            "Job Title": self.jobTitle,
+            "company Name": self.companyName,
+        }
 
 
 if __name__ == "__main__":
