@@ -561,46 +561,44 @@ def create_app():
 
     @app.route("/resume", methods=["POST"])
     def upload_resume():
-        try:
-            userid = get_userid_from_header()
-            try:
-                file = request.files["file"].read()
-            except:
-                return jsonify({"error": "No resume file found in the input"}), 400
 
-            user = Users.objects(id=userid).first()
+        ''' This method uploads a resume file into the database and gives a message as response if successfully uploaded 
+        '''
+        try:
+            id=get_userid_from_header()
+            try:
+                file= request.files["file"].read()
+            except:
+                return jsonify({"error":"File not found"}),400
+            user=Users.objects(id=id).first()
             if not user.resume.read():
-                # There is no file
                 user.resume.put(file)
                 user.save()
-                return jsonify({"message": "resume successfully uploaded"}), 200
+                return jsonify({"message":"resume  uploaded"}), 200
             else:
-                # There is a file, we are replacing it
                 user.resume.replace(file)
                 user.save()
-                return jsonify({"message": "resume successfully replaced"}), 200
+                return jsonify({"message": "resume  replaced"}), 200
         except Exception as e:
             print(e)
             return jsonify({"error": "Internal server error"}), 500
 
+
     @app.route("/resume", methods=["GET"])
     def get_resume():
         """
-        Retrieves the resume file for the user
-
-        :return: response with file
+        Retrieves the resume file from the database
+        Response: return the file from database
         """
         try:
-            userid = get_userid_from_header()
+            id = get_userid_from_header()
             try:
-                user = Users.objects(id=userid).first()
-                if len(user.resume.read()) == 0:
-                    raise FileNotFoundError
+                user = Users.objects(id=id).first()
+                if len(user.resume.read()) == 0:  raise FileNotFoundError
                 else:
-                    user.resume.seek(0)
+                     user.resume.seek(0)
             except:
-                return jsonify({"error": "resume could not be found"}), 400
-
+                return jsonify({"error": "resume not be found"}), 400
             response = send_file(
                 user.resume,
                 mimetype="application/pdf",
@@ -612,9 +610,8 @@ def create_app():
             return response, 200
         except:
             return jsonify({"error": "Internal server error"}), 500
-
     return app
-
+    
 
 app = create_app()
 
