@@ -1,5 +1,43 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { createNewBoard, deleteBoard, updateBoard, updateColumn } from "../api/boardsHandler";
+import $ from "jquery";
+
+const createNewBoard = (board) => {
+  $.ajax({
+    url: "http://localhost:5000/boards",
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+      "Access-Control-Allow-Origin": "http://localhost:3000",
+      "Access-Control-Allow-Credentials": "true",
+    },
+    credentials: "include",
+    data: JSON.stringify({
+      board: board,
+    }),
+    success: (board) => {
+      console.log("board created", board);
+    },
+  });
+};
+
+const deleteBoard = (board_id) => {
+  $.ajax({
+    url: "http://localhost:5000/boards",
+    method: "DELETE",
+    headers: {
+      Authorization: "Bearer " + localStorage.getItem("token"),
+      "Access-Control-Allow-Origin": "http://localhost:3000",
+      "Access-Control-Allow-Credentials": "true",
+    },
+    credentials: "include",
+    data: JSON.stringify({
+      board_id: board_id,
+    }),
+    success: (msg) => {
+      console.log("board deleted", msg);
+    },
+  });
+};
 
 const boardsSlice = createSlice({
   name: "boards",
@@ -20,20 +58,20 @@ const boardsSlice = createSlice({
         columns: [],
       };
       board.columns = payload.newColumns;
+      state.push(board);
       createNewBoard(board);
-      // state.push({...board, _id: boardid});
     },
     editBoard: (state, action) => {
-      const {boardid, name} = action.payload;
-      const board = state.find((brd) => brd._id.$oid === boardid);
-      
-      board.name = name;
-      updateBoard(board);
+      const payload = action.payload;
+      const board = state.find((board) => board.isActive);
+      board.name = payload.name;
+      board.columns = payload.newColumns;
+      createNewBoard(state);
     },
-    deleteBoard: (state, action) => {
-      let board_id = action.payload.boardid
-      deleteBoard(board_id);
-      // state = [...state.filter((brd) => board_id !== brd._id.$oid)];
+    deleteBoard: (state) => {
+      const board = state.find((board) => board.isActive);
+      state.splice(state.indexOf(board), 1);
+      deleteBoard(board.board_id);
     },
     setBoardActive: (state, action) => {
       state.map((board, index) => {
@@ -50,8 +88,7 @@ const boardsSlice = createSlice({
       const board = state.find((board) => board.isActive);
       const column = board.columns.find((col, index) => index === newColIndex);
       column.tasks.push(task);
-      updateColumn(column)
-      // createNewBoard(state);
+      createNewBoard(state);
     },
     editTask: (state, action) => {
       const {
@@ -70,32 +107,21 @@ const boardsSlice = createSlice({
       task.status = status;
       task.description = description;
       task.subtasks = subtasks;
-      column.task = task
-      if (prevColIndex === newColIndex) {
-        updateColumn(column)
-      } else {
-        const prevCol = board.columns.find((col, i) => i === prevColIndex);
-        const task = prevCol.tasks.splice(taskIndex, 1)[0];
-        prevCol.tasks = prevCol.tasks.filter(index => index !== taskIndex)
-        const col = board.columns.find((col, i) => i === newColIndex);
-        task.status = col.name;
-        col.tasks.push(task);
-        updateColumn(col)
-        updateColumn(prevCol)
-      }
+      if (prevColIndex === newColIndex) return;
+      column.tasks = column.tasks.filter((task, index) => index !== taskIndex);
+      const newCol = board.columns.find((col, index) => index === newColIndex);
+      newCol.tasks.push(task);
+      createNewBoard(state);
     },
     dragTask: (state, action) => {
       const { colIndex, prevColIndex, taskIndex } = action.payload;
       const board = state.find((board) => board.isActive);
       const prevCol = board.columns.find((col, i) => i === prevColIndex);
       const task = prevCol.tasks.splice(taskIndex, 1)[0];
-      prevCol.tasks = prevCol.tasks.filter(index => index !== taskIndex)
       const col = board.columns.find((col, i) => i === colIndex);
-      task.status = col.name;
       col.tasks.push(task);
-      updateColumn(col)
-      updateColumn(prevCol)
-      // createNewBoard(state);
+      task.status = col.name;
+      createNewBoard(state);
     },
     setSubtaskCompleted: (state, action) => {
       const payload = action.payload;
@@ -104,7 +130,6 @@ const boardsSlice = createSlice({
       const task = col.tasks.find((task, i) => i === payload.taskIndex);
       const subtask = task.subtasks.find((subtask, i) => i === payload.index);
       subtask.isCompleted = !subtask.isCompleted;
-      updateColumn(col)
     },
     setTaskStatus: (state, action) => {
       const payload = action.payload;
@@ -117,14 +142,13 @@ const boardsSlice = createSlice({
       col.tasks = col.tasks.filter((task, i) => i !== payload.taskIndex);
       const newCol = columns.find((col, i) => i === payload.newColIndex);
       newCol.tasks.push(task);
-      updateColumn(newCol)
     },
     deleteTask: (state, action) => {
       const payload = action.payload;
       const board = state.find((board) => board.isActive);
       const col = board.columns.find((col, i) => i === payload.colIndex);
       col.tasks = col.tasks.filter((task, i) => i !== payload.taskIndex);
-      updateColumn(col)
+      createNewBoard(state);
     },
   },
 });
