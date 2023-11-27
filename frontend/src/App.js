@@ -1,82 +1,96 @@
 import React, { useState, useEffect } from "react";
-import ApplicationPage from "./application";
+import { Route, Routes, useNavigate } from "react-router-dom";
+import TrackerPage from "./tracker";
 import LoginPage from "./login/LoginPage";
-import $ from "jquery";
 import boardsSlice from "./redux/boardsSlice";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
+import { Landing } from "./landing/Landing";
+import HeaderSimple from "./components/HeaderSimple";
+import { getDataFunction } from "./api/boardsHandler";
 
 function App() {
   const [auth, setAuth] = useState(false);
-  const boardData = useSelector((state) => state.boards);
   const dispatch = useDispatch();
-
-  const getDataFunction = () => {
-    $.ajax({
-      url: "http://localhost:5000/getBoards",
-      method: "GET",
-      headers: {
-        Authorization: "Bearer " + localStorage.getItem("token"),
-        "Access-Control-Allow-Origin": "http://localhost:3000",
-        "Access-Control-Allow-Credentials": "true",
-      },
-      credentials: "include",
-      data: JSON.stringify({
-        getData: "getData",
-      }),
-      success: (boards) => {
-        console.log(boards)
-        dispatch(boardsSlice.actions.setInitialData({ initialData: boards }));
-        console.log("SRJ BOARDS", boards);
-        console.log("boards", boardData);
-      },
-    });
-  };
+  const navigate = useNavigate();
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("expiry");
+    localStorage.removeItem("theme");
     dispatch(boardsSlice.actions.deleteInitialData());
-    setCurrentPage(
-      <LoginPage
-        side={() =>
-          setCurrentPage(
-            <ApplicationPage
-              initialData={boardData}
-              getData={getDataFunction}
-              logout={handleLogout}
-            />
-          )
-        }
-      />
-    );
-    setAuth(false);
+    setAuth(auth => !auth);
+    navigate("/login");
   };
-  const [currentPage, setCurrentPage] = useState(
-    <LoginPage
-      side={() =>
-        setCurrentPage(
-          <ApplicationPage
-            initialData={boardData}
-            getData={getDataFunction}
-            logout={handleLogout}
-          />
-        )
-      }
-    />
-  );
+
   useEffect(() => {
     if (localStorage.getItem("token")) {
       setAuth(true);
-      setCurrentPage(
-        <ApplicationPage
-          initialData={boardData}
-          getData={getDataFunction}
-          logout={handleLogout}
-        />
-      );
+      getDataFunction().then((boards) => {
+        dispatch(boardsSlice.actions.setInitialData({ initialData: boards }));
+      }).catch((err) => navigate("/boards"))
+    } else {
+      setAuth(false);
     }
-  }, [auth]);
+  }, [auth, dispatch, navigate]);
 
-  return <div className="main-page">{currentPage}</div>;
+  return (
+    <div className="main-page">
+      <p aria-hidden id="test" className="absolute opacity-0">
+        Test test
+      </p>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            <>
+              <HeaderSimple auth={auth} logout={handleLogout} />
+              <LoginPage activeTab="login" auth={auth} />
+            </>
+          }
+        />
+        <Route
+          path="/signup"
+          element={
+            <>
+              <HeaderSimple auth={auth} logout={handleLogout} />
+              <LoginPage activeTab="signup" auth={auth} />
+            </>
+          }
+        />
+        <Route
+          path="/boards"
+          element={
+            <TrackerPage
+              getData={getDataFunction}
+              logout={handleLogout}
+              page="boards"
+              auth={auth}
+            />
+          }
+        />
+        <Route
+          path="/applications"
+          element={
+            <TrackerPage
+              getData={getDataFunction}
+              logout={handleLogout}
+              page="applications"
+              auth={auth}
+            />
+          }
+        />
+        <Route
+          path="/" exact
+          element={
+            <>
+              <HeaderSimple auth={auth} logout={handleLogout} />
+              <Landing auth={auth} />
+            </>
+          }
+        />
+      </Routes>
+    </div>
+  );
 }
 
 export default App;
