@@ -9,9 +9,8 @@ function Task({ colIndex, taskIndex }) {
   const col = columns.find((column, i) => i === colIndex);
   const task = col?.tasks.find((t, i) => i === taskIndex);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-
   let completed = 0;
-  let subtasks = task.subtasks;
+  let subtasks = task?.subtasks || [];
   subtasks.forEach((subtask) => {
     if (subtask.isCompleted) {
       completed++;

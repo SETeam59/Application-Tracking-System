@@ -25,7 +25,7 @@ function Subtask({ index, taskIndex, colIndex }) {
         checked={checked}
         onChange={onChange}
       />
-      <p className={checked && " line-through opacity-30 "}>
+      <p className={`${checked && " line-through opacity-30 "}`}>
       {subtask.title}
       </p>
     </div>
