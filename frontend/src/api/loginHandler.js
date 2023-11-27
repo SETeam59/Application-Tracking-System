@@ -1,12 +1,12 @@
 import fetch from './handler'
 
 export const getToken = (params) => {
-  // console.log(params)
-  return fetch({
+  let res =  fetch({
     method: 'POST',
     url: '/users/login',
     body: params
   })
+  return res
 }
 
 export const signUp = (params) => {
