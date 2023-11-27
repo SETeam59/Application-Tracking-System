@@ -4,15 +4,26 @@ import Header from "../components/Header";
 import Home from "../components/Home";
 import EmptyBoard from "../components/EmptyBoard";
 import boardsSlice from "../redux/boardsSlice";
+import { useNavigate } from "react-router-dom";
 
-function ApplicationPage({ initialData, logout, getData }) {
+function TrackerPage({ logout, getData, page, auth }) {
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const dispatch = useDispatch();
   const boards = useSelector((state) => state.boards);
   const activeBoard = boards.find((board) => board.isActive);
+  
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if(!localStorage.getItem("token")) {
+      navigate("/login")
+    }
+  })
+
   useEffect(() => {
     getData();
-  }, []);
+  }, [getData]);
+
   if (!activeBoard && boards.length > 0)
     dispatch(boardsSlice.actions.setBoardActive({ index: 0 }));
   return (
@@ -21,18 +32,20 @@ function ApplicationPage({ initialData, logout, getData }) {
         {boards.length > 0 ? (
           <>
             <Header
-              setIsBoardModalOpen={setIsBoardModalOpen}
-              isBoardModalOpen={isBoardModalOpen}
-              logout={logout}
-            />
+                setIsBoardModalOpen={setIsBoardModalOpen}
+                isBoardModalOpen={isBoardModalOpen}
+                logout={logout}
+                simple={page === "applications"}
+              />
             <Home
               setIsBoardModalOpen={setIsBoardModalOpen}
               isBoardModalOpen={isBoardModalOpen}
+              page={page}
             />
           </>
         ) : (
           <>
-            <EmptyBoard type="add" />
+            <EmptyBoard type="add" logout={logout} auth={auth} />
           </>
         )}
       </>
@@ -40,4 +53,4 @@ function ApplicationPage({ initialData, logout, getData }) {
   );
 }
 
-export default ApplicationPage;
+export default TrackerPage;
